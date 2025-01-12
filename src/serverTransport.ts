@@ -37,8 +37,8 @@ export class ServerTransport implements UnderlyingSource {
     private dataChannel: wrtc.RTCDataChannel
   ) {}
 
-  async start(controller: ReadableStreamController<Uint8Array>) {
-    const onMessage = ({ data }: { data: Uint8Array }) => {
+  async start(controller: ReadableStreamController<ArrayBuffer>) {
+    const onMessage = ({ data }: { data: ArrayBuffer | string }) => {
       controller.enqueue(data);
     };
 
@@ -49,7 +49,7 @@ export class ServerTransport implements UnderlyingSource {
     await this.peerConnection.setRemoteDescription(answer);
   }
 
-  send(data: Buffer) {
+  send(data: Uint8Array | string) {
     this.dataChannel.send(data);
   }
 }

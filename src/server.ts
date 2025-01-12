@@ -1,37 +1,37 @@
-import { randomUUID } from "node:crypto";
 import { ReadableStream } from "node:stream/web";
-import { Tun } from "tuntap2";
-import { serve } from "@hono/node-server";
-import { Hono } from "hono";
 import { basicAuth } from "hono/basic-auth";
+import { serve } from "@hono/node-server";
+import { randomUUID } from "node:crypto";
+import { Tun } from "tuntap2";
+import { Hono } from "hono";
 
 import { ServerTransport, ServerTransportFactory } from "./serverTransport";
 import { BasicAuthCreds, TransportStatus } from "./types";
 
 class Client {
-  transportStream: ReadableStream;
+  transportStream: ReadableStream<string | ArrayBufferView>;
   hasStart = false;
 
   constructor(private tunDevice: Tun, public transport: ServerTransport) {
     this.transportStream = new ReadableStream(transport);
-    this.start();
   }
 
   async start() {
-    for await (const message of this.transportStream) {
-      if (!this.hasStart) {
-        this.hasStart =
-          new TextDecoder().decode(message) === TransportStatus.START;
-      } else {
-        this.tunDevice.write(Buffer.from(message));
-      }
-    }
-
-    this.tunDevice.on("data", (data) => {
+    this.tunDevice.on("data", (data: Buffer) => {
       if (this.hasStart) {
-        this.transport.send(data);
+        this.transport.send(new Uint8Array(data));
       }
     });
+
+    for await (const message of this.transportStream) {
+      if (!this.hasStart) {
+        this.hasStart = message === TransportStatus.START;
+      } else {
+        if (typeof message !== "string") {
+          this.tunDevice.write(new Uint8Array(message));
+        }
+      }
+    }
   }
 
   destroy() {}
@@ -73,6 +73,7 @@ export async function server(
     console.log(body);
 
     await client.transport.applyAnswer(body);
+    client.start();
 
     return connection.status(200);
   });

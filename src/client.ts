@@ -1,7 +1,7 @@
 import { ReadableStream } from "node:stream/web";
 import { Tun } from "tuntap2";
 
-import { ClientTransport } from "./clientTransport";
+import { ClientTransportFactory } from "./clientTransport";
 import { BasicAuthCreds, TransportStatus } from "./types";
 
 export async function client(
@@ -10,29 +10,23 @@ export async function client(
   address: string,
   basicAuthCreds: BasicAuthCreds
 ) {
-  const transport = new ClientTransport(
+  const transport = await ClientTransportFactory(
     `http://${host}:${port}`,
     basicAuthCreds
   );
   const stream = new ReadableStream(transport);
   const tunDevice = new Tun();
-  const reader = stream.getReader();
-  const transportStatus = (await reader.read()).value;
 
-  if (new TextDecoder().decode(transportStatus) !== TransportStatus.OK) {
-    throw new Error("Transport is not OK!");
-  }
-
-  reader.releaseLock();
+  transport.send(TransportStatus.START);
 
   const startRead = async () => {
     for await (const message of stream) {
-      tunDevice.write(Buffer.from(message.buffer));
+      tunDevice.write(message);
     }
   };
 
-  tunDevice.on("data", (data) => {
-    transport.send(data);
+  tunDevice.on("data", (data: Buffer) => {
+    transport.send(new Uint8Array(data));
   });
 
   tunDevice.ipv4 = address;
