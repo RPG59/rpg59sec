@@ -27,7 +27,7 @@ export async function client(
 
   const startRead = async () => {
     for await (const message of stream) {
-      tunDevice.write(message);
+      tunDevice.write(Buffer.from(message.buffer));
     }
   };
 

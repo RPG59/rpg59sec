@@ -26,7 +26,7 @@ program
       throw new Error("Invalid Basic Auth Credentials");
     }
 
-    await client(host, portNumber, { username, password });
+    await client(host, portNumber, address, { username, password });
   });
 
 program

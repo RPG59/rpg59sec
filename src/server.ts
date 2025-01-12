@@ -6,10 +6,11 @@ import { Hono } from "hono";
 import { basicAuth } from "hono/basic-auth";
 
 import { ServerTransport, ServerTransportFactory } from "./serverTransport";
-import { BasicAuthCreds } from "./types";
+import { BasicAuthCreds, TransportStatus } from "./types";
 
 class Client {
   transportStream: ReadableStream;
+  hasStart = false;
 
   constructor(private tunDevice: Tun, public transport: ServerTransport) {
     this.transportStream = new ReadableStream(transport);
@@ -18,8 +19,19 @@ class Client {
 
   async start() {
     for await (const message of this.transportStream) {
-      console.log(message);
+      if (!this.hasStart) {
+        this.hasStart =
+          new TextDecoder().decode(message) === TransportStatus.START;
+      } else {
+        this.tunDevice.write(Buffer.from(message));
+      }
     }
+
+    this.tunDevice.on("data", (data) => {
+      if (this.hasStart) {
+        this.transport.send(data);
+      }
+    });
   }
 
   destroy() {}
@@ -42,7 +54,7 @@ export async function server(
   app.get("client/connect", async (connection) => {
     const id = randomUUID();
     const transport = await ServerTransportFactory();
-    const client = new Client({} as any, transport);
+    const client = new Client(tunDevice, transport);
 
     CLIENTS[id] = client;
 
